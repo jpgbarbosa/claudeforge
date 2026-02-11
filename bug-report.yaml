@@ -1,0 +1,49 @@
+name: Bug Report
+description: Report a bug for the swarm to fix
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a bug? Fill in the details below. The AI development team will investigate
+        once you add the `ready-to-build` label.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the bug clearly
+      placeholder: "e.g., Clicking 'Save' on the settings page shows a spinner that never stops"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen?
+      description: What's the correct behavior?
+      placeholder: "e.g., Settings should save and show a success message within 2 seconds"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we trigger this bug?
+      placeholder: |
+        1. Go to Settings page
+        2. Change the display name
+        3. Click Save
+        4. Observe the infinite spinner
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, browser info, error messages, or anything else
+    validations:
+      required: false

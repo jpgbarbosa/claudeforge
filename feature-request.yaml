@@ -1,0 +1,58 @@
+name: Feature Request
+description: Request a new feature for the swarm to build
+title: "[Feature]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for submitting a feature request! Please fill in as much detail as you can.
+        The AI development team will pick this up once you add the `ready-to-build` label.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What do you want to achieve?
+      description: Describe the goal in plain language. What problem does this solve?
+      placeholder: "e.g., Users should be able to export their data as CSV so they can use it in spreadsheets"
+    validations:
+      required: true
+
+  - type: textarea
+    id: who
+    attributes:
+      label: Who is this for?
+      description: Which users or roles will use this feature?
+      placeholder: "e.g., Admin users, all logged-in users, public visitors"
+    validations:
+      required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: How do we know it's done?
+      description: What does success look like? Be specific.
+      placeholder: |
+        e.g.,
+        - User clicks "Export" button on the dashboard
+        - A CSV file downloads with all their records
+        - File includes columns: name, email, created_at
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints or preferences
+      description: Any specific requirements, design preferences, deadlines, or things to avoid?
+      placeholder: "e.g., Must work on mobile, should match existing dashboard style, don't include deleted records"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, mockups, links, or anything else that helps
+    validations:
+      required: false

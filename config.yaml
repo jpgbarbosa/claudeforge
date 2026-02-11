@@ -1,0 +1,47 @@
+# Swarm Configuration
+# Edit this per project
+
+project_name: ""
+repo: ""
+branch_prefix: "swarm/"
+
+# Infrastructure
+supabase_project_id: ""
+vercel_project_id: ""
+
+# Agent settings
+model: "claude-sonnet-4-20250514"
+max_retries_per_task: 3
+rate_limit_backoff_seconds: 300
+
+# Stages
+stages:
+  - discovery
+  - planning
+  - development
+  - visual_qa
+  - review
+
+# GitHub integration
+github:
+  issue_label_trigger: "ready-to-build"
+  issue_label_in_progress: "swarm-working"
+  issue_label_done: "swarm-complete"
+  project_board: true
+  post_comments: true
+  create_pr: true
+
+# Human gates
+gates:
+  # Stakeholder must approve plan before development starts
+  plan_approval: true
+  # Tech must approve PR before merge
+  tech_review_required: true
+
+# Stack defaults
+stack:
+  runtime: "node"
+  framework: "next"
+  database: "supabase"
+  testing: "vitest"
+  visual_qa: "playwright"

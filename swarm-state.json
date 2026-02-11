@@ -1,0 +1,15 @@
+{
+  "project": "",
+  "current_issue": null,
+  "current_stage": "idle",
+  "current_task_index": 0,
+  "total_tasks": 0,
+  "status": "idle",
+  "last_agent": null,
+  "last_updated": null,
+  "human_input_needed": false,
+  "human_input_channel": null,
+  "open_questions": [],
+  "feedback_pending": [],
+  "tasks": []
+}
