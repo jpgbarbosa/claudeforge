@@ -28,13 +28,16 @@ Create `docs/product-spec.md` with:
 - **Out of scope**: Explicitly list what this does NOT include
 
 ### 3. Clarify with stakeholder (if needed)
-If product decisions need stakeholder input (e.g., "Should expired users see a paywall or be redirected?"), post on the GitHub issue.
+If product decisions need stakeholder input (e.g., "Should expired users see a paywall or be redirected?"), first check all issue comments for bypass phrases — "enforce current description", "proceed as-is", "skip validation", or similar intent. If a bypass is found, do **not** ask the stakeholder. Instead, make reasonable assumptions and document them explicitly in the product spec (e.g., "Assumed X because stakeholder requested to proceed as-is").
+
+If no bypass is found and questions are necessary, post on the GitHub issue.
 
 Update state:
 ```json
 {
   "human_input_needed": true,
   "human_input_channel": "issue",
+  "resume_agent": "product-strategist",
   "open_questions": ["<your questions>"]
 }
 ```

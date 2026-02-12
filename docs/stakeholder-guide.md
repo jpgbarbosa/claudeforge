@@ -42,6 +42,16 @@ Leave your feedback as comments on the PR.
 **Phase 5: Tech review**
 A technical team member reviews the code and merges the PR when everything is solid. Once merged, the feature goes live.
 
+### Clarifying questions and bypassing them
+
+The AI team may ask clarifying questions on your issue before starting work — for example, to confirm the target user, success criteria, or scope. This helps ensure the final result matches your intent.
+
+If you'd rather the team proceeds immediately with whatever information is available, comment on the issue with:
+
+> **enforce current description**
+
+The team will do its best with the current info, but the result may require more iteration. Other phrases that work: "proceed as-is" or "skip validation".
+
 ### Tips for good requests
 
 - **Be specific**: "Users should be able to filter the table by date range" is better than "Improve the table"

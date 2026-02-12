@@ -1,17 +1,18 @@
 #!/bin/bash
 # orchestrator.sh — Main swarm orchestrator
-# Runs on VPS, processes one issue at a time
-# Usage: ./orchestrator.sh /path/to/project
+# Single-invocation state machine executor, run by GitHub Actions
+# Usage: ./scripts/orchestrator.sh <discovery|build>
 
 set -euo pipefail
 
-PROJECT_DIR="${1:?Usage: ./orchestrator.sh /path/to/project}"
-cd "$PROJECT_DIR"
+MODE="${1:?Usage: ./scripts/orchestrator.sh <discovery|build>}"
 
 SWARM_DIR=".swarm"
 STATE_FILE="swarm-state.json"
 GITHUB_SCRIPT="./scripts/github-integration.sh"
 MAX_RETRIES=3
+
+mkdir -p "$SWARM_DIR/logs"
 
 log() {
   echo "[SWARM $(date -u +%Y-%m-%dT%H:%M:%SZ)] $1" | tee -a "$SWARM_DIR/logs/orchestrator.log"
@@ -36,6 +37,7 @@ run_agent() {
   while [ $retries -lt $MAX_RETRIES ]; do
     if claude --prompt-file "$prompt_file" 2>&1 | tee -a "$SWARM_DIR/logs/${agent_name}.log"; then
       log "Agent $agent_name completed successfully"
+      update_state '.last_agent = "'"$agent_name"'" | .last_updated = (now | tostring)'
       return 0
     fi
 
@@ -69,59 +71,62 @@ commit_and_push() {
   fi
 }
 
-wait_for_human() {
-  local channel=$(read_state '.human_input_channel')
-  log "Waiting for human input on $channel..."
-
-  while [ "$(read_state '.human_input_needed')" = "true" ]; do
-    sleep 120 # Check every 2 minutes
-    git pull origin HEAD --rebase 2>/dev/null || true
-
-    # Re-read state in case human (or a webhook) updated it
-    if [ "$(read_state '.human_input_needed')" = "false" ]; then
-      log "Human input received. Resuming."
-      return 0
-    fi
-  done
+check_human_gate() {
+  if [ "$(read_state '.human_input_needed')" = "true" ]; then
+    log "Human input needed. Committing state and exiting."
+    commit_and_push "swarm: awaiting human input"
+    exit 42
+  fi
 }
 
-# --- Main loop ---
+# --- Main ---
 
-log "Starting orchestrator for project: $PROJECT_DIR"
-git pull origin HEAD --rebase 2>/dev/null || true
+log "Starting orchestrator in $MODE mode"
 
 STAGE=$(read_state '.current_stage')
 STATUS=$(read_state '.status')
+LAST_AGENT=$(read_state '.last_agent')
+RESUME_AGENT=$(read_state '.resume_agent // "null"')
 
-if [ "$STATUS" = "idle" ]; then
-  log "No active issue. Exiting."
-  exit 0
-fi
+log "Current stage: $STAGE | Status: $STATUS | Last agent: $LAST_AGENT | Resume agent: $RESUME_AGENT"
 
-log "Current stage: $STAGE | Status: $STATUS"
+check_human_gate
 
-# Check for pending human input
-if [ "$(read_state '.human_input_needed')" = "true" ]; then
-  wait_for_human
-  STAGE=$(read_state '.current_stage')
-fi
-
-case "$STAGE" in
+case "$MODE" in
   "discovery")
-    run_agent "business-analyst"
-    commit_and_push "swarm: business analysis complete"
+    # Discovery: BA → PS → Architect (resume from last_agent if re-invoked)
+    DISCOVERY_AGENTS=("business-analyst" "product-strategist" "architect")
+    SKIP=true
 
-    run_agent "product-strategist"
-    commit_and_push "swarm: product spec complete"
+    # If no last agent, start from the beginning
+    if [ "$LAST_AGENT" = "null" ] || [ -z "$LAST_AGENT" ]; then
+      SKIP=false
+    fi
 
-    run_agent "architect"
-    commit_and_push "swarm: architecture complete"
+    for agent in "${DISCOVERY_AGENTS[@]}"; do
+      if [ "$SKIP" = true ]; then
+        if [ "$agent" = "$LAST_AGENT" ]; then
+          SKIP=false
+          if [ "$RESUME_AGENT" != "$agent" ]; then
+            continue  # completed normally, skip
+          fi
+          # resume_agent matches — fall through to re-run
+          log "Re-running agent $agent (resume_agent match)"
+          update_state '.resume_agent = null'
+        else
+          continue
+        fi
+      fi
 
+      run_agent "$agent"
+      commit_and_push "swarm: $agent complete"
+      check_human_gate
+    done
+
+    # Planning: Tech Lead → open draft PR
     update_state '.current_stage = "planning"'
-    commit_and_push "swarm: discovery stage complete"
-    ;;
+    commit_and_push "swarm: discovery complete, starting planning"
 
-  "planning")
     run_agent "tech-lead"
     commit_and_push "swarm: implementation plan ready"
 
@@ -129,66 +134,78 @@ case "$STAGE" in
     source "$GITHUB_SCRIPT"
     gh_open_draft_pr
 
-    update_state '.human_input_needed = true | .human_input_channel = "pr"'
+    update_state '.human_input_needed = true | .human_input_channel = "pr" | .current_stage = "planning"'
     commit_and_push "swarm: awaiting plan approval on PR"
 
-    wait_for_human
-    update_state '.current_stage = "development" | .current_task_index = 0'
-    commit_and_push "swarm: plan approved, starting development"
+    log "Discovery complete. Draft PR opened, awaiting plan approval."
     ;;
 
-  "development")
-    TOTAL=$(read_state '.total_tasks')
-    CURRENT=$(read_state '.current_task_index')
+  "build")
+    # Development → Visual QA → Review
+    STAGE=$(read_state '.current_stage')
 
-    while [ "$CURRENT" -lt "$TOTAL" ]; do
-      log "Task $((CURRENT + 1))/$TOTAL"
-      run_agent "developer"
-      commit_and_push "swarm: task $((CURRENT + 1))/$TOTAL complete"
-
+    # Development loop
+    if [ "$STAGE" = "development" ] || [ "$STAGE" = "planning" ]; then
+      update_state '.current_stage = "development"'
+      TOTAL=$(read_state '.total_tasks')
       CURRENT=$(read_state '.current_task_index')
 
-      # Check for feedback from visual QA (rework cycle)
-      if [ "$(read_state '.current_stage')" != "development" ]; then
-        break
+      while [ "$CURRENT" -lt "$TOTAL" ]; do
+        log "Task $((CURRENT + 1))/$TOTAL"
+        run_agent "developer"
+        commit_and_push "swarm: task $((CURRENT + 1))/$TOTAL complete"
+
+        CURRENT=$(read_state '.current_task_index')
+
+        # Check if stage changed (e.g., QA rework cycle)
+        if [ "$(read_state '.current_stage')" != "development" ]; then
+          break
+        fi
+      done
+
+      if [ "$CURRENT" -ge "$TOTAL" ]; then
+        update_state '.current_stage = "visual_qa"'
+        commit_and_push "swarm: all tasks complete, starting visual QA"
       fi
-    done
 
-    if [ "$CURRENT" -ge "$TOTAL" ]; then
-      update_state '.current_stage = "visual_qa"'
-      commit_and_push "swarm: all tasks complete, starting visual QA"
+      STAGE=$(read_state '.current_stage')
     fi
-    ;;
 
-  "visual_qa")
-    run_agent "visual-qa"
-    commit_and_push "swarm: visual QA complete"
+    # Visual QA
+    if [ "$STAGE" = "visual_qa" ]; then
+      run_agent "visual-qa"
+      commit_and_push "swarm: visual QA complete"
 
-    # Check if QA sent it back to development
-    if [ "$(read_state '.current_stage')" = "development" ]; then
-      log "Visual QA found issues. Returning to development."
-    else
+      # Check if QA sent it back to development
+      if [ "$(read_state '.current_stage')" = "development" ]; then
+        log "Visual QA found issues. Returning to development."
+        # Re-run build mode from development
+        exec "$0" build
+      fi
+
       update_state '.current_stage = "review"'
       commit_and_push "swarm: visual QA passed, starting review"
+      STAGE="review"
     fi
-    ;;
 
-  "review")
-    run_agent "reviewer"
-    commit_and_push "swarm: review complete, awaiting tech review"
+    # Review
+    if [ "$STAGE" = "review" ]; then
+      run_agent "reviewer"
+      commit_and_push "swarm: review complete, awaiting tech review"
 
-    # PR is now ready for human tech review
-    source "$GITHUB_SCRIPT"
-    gh_mark_pr_ready
+      # PR is now ready for human tech review
+      source "$GITHUB_SCRIPT"
+      gh_mark_pr_ready
 
-    update_state '.status = "awaiting_tech_review" | .human_input_needed = true | .human_input_channel = "pr"'
-    commit_and_push "swarm: ready for tech review"
+      update_state '.status = "awaiting_tech_review" | .human_input_needed = true | .human_input_channel = "pr"'
+      commit_and_push "swarm: ready for tech review"
 
-    log "Done. PR is ready for tech review."
+      log "Done. PR is ready for tech review."
+    fi
     ;;
 
   *)
-    log "Unknown stage: $STAGE"
+    log "Unknown mode: $MODE (expected 'discovery' or 'build')"
     exit 1
     ;;
 esac

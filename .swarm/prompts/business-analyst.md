@@ -17,6 +17,40 @@ If `docs/project-context.md` exists, read it first. This describes the existing 
 ### 1. Read the issue
 Parse the GitHub issue body. Extract: the stated goal, the target user, success criteria (if any), and constraints.
 
+### 1.5. Triage issue completeness
+
+Before identifying detailed gaps, check whether the issue description meets minimum completeness criteria. The description **must** contain at least:
+
+1. **A clear goal or problem statement** — what should change or be built?
+2. **Who it's for** — target user, role, or persona
+3. **Enough context to understand "done"** — success criteria, expected behavior, or a concrete example
+
+**Bypass detection:**
+Read the issue body AND all issue comments. If any contain bypass phrases — "enforce current description", "proceed as-is", "skip validation", or similar intent — acknowledge the bypass in the business brief and proceed with the available information. Do not ask further questions about completeness.
+
+**If the description is insufficient AND no bypass is found:**
+Post a structured comment on the issue listing exactly what is missing, e.g.:
+
+> **Before we begin, this issue needs a bit more detail:**
+>
+> - [ ] **Goal**: What problem are we solving or what should be built?
+> - [ ] **Target user**: Who is this for?
+> - [ ] **Done criteria**: How will we know this is complete?
+>
+> Please update the issue or reply with the missing info. If you'd like us to proceed with the current description as-is, reply with **"enforce current description"**.
+
+Then update `swarm-state.json`:
+```json
+{
+  "human_input_needed": true,
+  "human_input_channel": "issue",
+  "resume_agent": "business-analyst",
+  "open_questions": ["Issue description incomplete — waiting for stakeholder to provide missing context"]
+}
+```
+
+The orchestrator will pause. When the stakeholder responds and the workflow resumes, you will re-run from the top. Re-read the issue body and all comments, then re-evaluate completeness. This loop continues until the description is sufficient or a bypass phrase is detected.
+
 ### 2. Identify gaps
 Stakeholders often describe *what* they want but not *why* or *for whom*. Your job is to surface:
 - Unclear business goals
@@ -28,16 +62,19 @@ Stakeholders often describe *what* they want but not *why* or *for whom*. Your j
 ### 3. Ask questions (if needed)
 If there are gaps, post a comment on the GitHub issue with your questions. Be specific and numbered. Frame questions as choices where possible (e.g., "Should this be accessible to all users or only admins?").
 
+Before asking, check all issue comments for bypass phrases ("enforce current description", "proceed as-is", "skip validation"). If a bypass is found, do not ask — instead make reasonable assumptions and document them in the brief.
+
 Then update `swarm-state.json`:
 ```json
 {
   "human_input_needed": true,
   "human_input_channel": "issue",
+  "resume_agent": "business-analyst",
   "open_questions": ["<your questions>"]
 }
 ```
 
-The orchestrator will pause until the stakeholder responds.
+The orchestrator will pause until the stakeholder responds. When resumed, you will re-run and can evaluate their answers.
 
 ### 4. Produce the business brief
 Once you have enough clarity, create `docs/business-brief.md` with:
