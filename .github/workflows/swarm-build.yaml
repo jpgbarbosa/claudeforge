@@ -15,6 +15,10 @@ jobs:
     if: >
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/approve-plan'))
+    permissions:
+      contents: write        # git push
+      pull-requests: write   # gh pr ready, gh pr view
+      issues: read           # issue_comment trigger context
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -35,6 +39,17 @@ jobs:
             echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify commenter authorization
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission --jq '.permission')
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" && "$PERMISSION" != "write" ]]; then
+            echo "ERROR: User ${{ github.event.comment.user.login }} lacks write permission ('$PERMISSION')"
+            exit 1
+          fi
+
       - name: Checkout swarm branch
         uses: actions/checkout@v4
         with:
@@ -46,6 +61,15 @@ jobs:
           npm install -g @anthropic-ai/claude-code
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+          claude --version
+          yq --version
+
+      - name: Validate secrets
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not configured"
+            exit 1
+          fi
 
       - name: Configure git
         run: |
@@ -61,12 +85,19 @@ jobs:
           git push origin HEAD
 
       - name: Run build
+        id: orchestrate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/orchestrator.sh scripts/github-integration.sh
-          scripts/orchestrator.sh build
+          EXIT_CODE=0
+          scripts/orchestrator.sh build || EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 42 ]; then
+            exit "$EXIT_CODE"
+          fi
 
-      - name: Push changes
+      - name: Push remaining changes
+        if: always() && (steps.orchestrate.outputs.exit_code == '0' || steps.orchestrate.outputs.exit_code == '42')
         run: |
-          git push origin HEAD --force-with-lease || git push origin HEAD
+          git push origin HEAD --force-with-lease || echo "No new changes to push"

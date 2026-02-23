@@ -4,11 +4,19 @@ on:
   issue_comment:
     types: [created]
 
+concurrency:
+  group: swarm-feedback-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   handle-feedback:
     if: >
       contains(github.event.issue.labels.*.name, 'swarm-working') &&
       github.event.comment.user.login != 'github-actions[bot]'
+    permissions:
+      contents: write        # git push (clear flag)
+      actions: write         # gh workflow run (re-trigger discovery)
+      issues: read           # read labels, comment context
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

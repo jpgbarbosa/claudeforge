@@ -64,6 +64,17 @@ gh_remove_label() {
 
 # --- Pull Requests ---
 
+_require_pr_number() {
+  local repo=$(get_repo)
+  local pr_number
+  pr_number=$(gh pr list --repo "$repo" --head "$(git branch --show-current)" --json number -q '.[0].number')
+  if [ -z "$pr_number" ] || [ "$pr_number" = "null" ]; then
+    echo "[GH] ERROR: No PR found for branch $(git branch --show-current)" >&2
+    return 1
+  fi
+  echo "$pr_number"
+}
+
 gh_open_draft_pr() {
   local repo=$(get_repo)
   local issue=$(get_issue_number)
@@ -101,7 +112,8 @@ Vercel preview will be available once implementation begins.
 gh_update_pr_body() {
   local new_body="$1"
   local repo=$(get_repo)
-  local pr_number=$(gh pr list --repo "$repo" --head "$(git branch --show-current)" --json number -q '.[0].number')
+  local pr_number
+  pr_number=$(_require_pr_number) || return 1
 
   gh pr edit "$pr_number" --repo "$repo" --body "$new_body"
   echo "[GH] Updated PR #$pr_number body"
@@ -110,7 +122,8 @@ gh_update_pr_body() {
 gh_post_pr_comment() {
   local body="$1"
   local repo=$(get_repo)
-  local pr_number=$(gh pr list --repo "$repo" --head "$(git branch --show-current)" --json number -q '.[0].number')
+  local pr_number
+  pr_number=$(_require_pr_number) || return 1
 
   gh pr comment "$pr_number" --repo "$repo" --body "$body"
   echo "[GH] Posted comment on PR #$pr_number"
@@ -118,7 +131,8 @@ gh_post_pr_comment() {
 
 gh_mark_pr_ready() {
   local repo=$(get_repo)
-  local pr_number=$(gh pr list --repo "$repo" --head "$(git branch --show-current)" --json number -q '.[0].number')
+  local pr_number
+  pr_number=$(_require_pr_number) || return 1
 
   gh pr ready "$pr_number" --repo "$repo"
   echo "[GH] PR #$pr_number marked ready for review"
