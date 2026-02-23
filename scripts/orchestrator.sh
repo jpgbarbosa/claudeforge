@@ -32,10 +32,13 @@ run_agent() {
   local prompt_file="$SWARM_DIR/prompts/${agent_name}.md"
   local retries=0
 
-  log "Running agent: $agent_name"
+  local model
+  model=$(yq -r '.model // "claude-sonnet-4-20250514"' "$SWARM_DIR/config.yaml")
+
+  log "Running agent: $agent_name (model: $model)"
 
   while [ $retries -lt $MAX_RETRIES ]; do
-    if claude --prompt-file "$prompt_file" 2>&1 | tee -a "$SWARM_DIR/logs/${agent_name}.log"; then
+    if claude -p --model "$model" --dangerously-skip-permissions "$(cat "$prompt_file")" 2>&1 | tee -a "$SWARM_DIR/logs/${agent_name}.log"; then
       log "Agent $agent_name completed successfully"
       update_state '.last_agent = "'"$agent_name"'" | .last_updated = (now | tostring)'
       return 0
