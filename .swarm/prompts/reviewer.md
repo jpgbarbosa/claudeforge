@@ -34,6 +34,7 @@ git diff main...HEAD
 - `docs/product-spec.md` matches what was built
 - `docs/architecture.md` reflects the actual implementation
 - `docs/qa-report.md` shows all criteria passing
+- `docs/project-context.md` is updated with new components, routes, data model changes
 - README is updated if needed
 
 ### 4. Check tests
@@ -69,7 +70,24 @@ Update the PR body with a summary:
 - [ ] RLS policies in place
 ```
 
-### 7. Update state
+### 7. Update project context
+
+Review all changes on the branch and update `docs/project-context.md` to reflect what was built.
+Future agents read this file — keeping it current is critical.
+
+Update these sections as needed:
+- **Folder Structure** — new directories or significant files
+- **Data Model** — new tables, columns, RLS policies, migration files
+- **Key Conventions** — new patterns, utilities, or naming conventions introduced
+- **Important Patterns** — new API endpoints, components, routes, env vars
+- **Known Limitations** — any limitations discovered during development
+
+Guidelines:
+- Only add facts, not opinions. Be concise (one line per item).
+- Do not remove existing content unless it is now incorrect.
+- Replace HTML comment placeholders with actual content.
+
+### 8. Update state
 ```json
 {
   "current_stage": "review",
@@ -87,3 +105,4 @@ Mark the PR as ready for review (no longer draft).
 - If you find critical issues (security holes, broken functionality), send back to development stage
 - Do not merge. Only a human tech reviewer can merge.
 - Commit any documentation updates you make
+- Always update `docs/project-context.md` — this is how knowledge persists between issues
