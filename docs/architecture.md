@@ -22,7 +22,7 @@ Issue Created → Discovery → Planning → Development → Visual QA → Revie
 | Planning | Tech Lead | Breaks spec into ordered, testable tasks |
 | Development | Developer | Implements tasks using TDD |
 | Visual QA | QA Agent | Tests the running app in a browser |
-| Review | Reviewer | Checks code quality, security, documentation |
+| Review | Reviewer | Checks code quality, security, documentation, updates project context |
 
 ### State Management
 
@@ -48,6 +48,21 @@ All swarm state lives in `swarm-state.json` at the repo root. This file tracks:
 | Visual QA | Playwright |
 | Agent Runtime | Claude Code CLI |
 | Orchestration | Bash + Git |
+| CI/CD | GitHub Actions |
+
+### Event-Driven Workflow Model
+
+The swarm runs entirely on GitHub Actions, triggered by GitHub events — no long-running server required.
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `swarm-discovery` | Issue labeled `ready-to-build`, `workflow_dispatch` | Runs discovery + planning agents, opens draft PR |
+| `swarm-build` | PR approved or `/approve-plan` comment | Runs development, visual QA, and review agents |
+| `swarm-feedback` | Comment on `swarm-working` issue | Clears human-input flag, re-triggers discovery |
+
+The orchestrator (`scripts/orchestrator.sh`) is a single-invocation state machine executor. It reads the current stage from `swarm-state.json`, runs the appropriate agents, and exits. If human input is needed, it commits state and exits with code 42 — the feedback workflow resumes it when the human responds.
+
+Concurrency is managed per-issue using GitHub Actions concurrency groups, ensuring only one workflow runs per issue at a time.
 
 ---
 

@@ -1,0 +1,72 @@
+name: Swarm Build
+
+on:
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: swarm-build-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: >
+      (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/approve-plan'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Resolve PR branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          else
+            # issue_comment on a PR — get the branch from the PR
+            PR_NUMBER=${{ github.event.issue.number }}
+            BRANCH=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName -q '.headRefName')
+            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout swarm branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update state for build
+        run: |
+          jq '.current_stage = "development" | .current_task_index = 0 | .human_input_needed = false' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add swarm-state.json
+          git commit -m "swarm: plan approved, starting build" || true
+          git push origin HEAD
+
+      - name: Run build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/orchestrator.sh scripts/github-integration.sh
+          scripts/orchestrator.sh build
+
+      - name: Push changes
+        run: |
+          git push origin HEAD --force-with-lease || git push origin HEAD

@@ -145,28 +145,3 @@ gh_move_issue_to_column() {
   esac
   echo "[GH] Issue moved to '$column'"
 }
-
-# --- Feedback Detection ---
-
-gh_check_for_new_feedback() {
-  # Check if there are new comments since last check
-  local repo=$(get_repo)
-  local issue=$(get_issue_number)
-  local last_updated=$(jq -r '.last_updated' "$STATE_FILE")
-
-  local new_comments=$(gh issue view "$issue" --repo "$repo" --json comments \
-    | jq --arg since "$last_updated" \
-      '[.comments[] | select(.createdAt > $since) | select(.author.login != "github-actions[bot]")] | length')
-
-  echo "$new_comments"
-}
-
-gh_get_latest_feedback() {
-  local repo=$(get_repo)
-  local issue=$(get_issue_number)
-  local last_updated=$(jq -r '.last_updated' "$STATE_FILE")
-
-  gh issue view "$issue" --repo "$repo" --json comments \
-    | jq -r --arg since "$last_updated" \
-      '.comments[] | select(.createdAt > $since) | select(.author.login != "github-actions[bot]") | .body'
-}

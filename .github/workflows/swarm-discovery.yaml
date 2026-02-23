@@ -1,0 +1,92 @@
+name: Swarm Discovery
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to resume"
+        required: true
+        type: number
+
+concurrency:
+  group: swarm-issue-${{ github.event.inputs.issue_number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  discovery:
+    if: >
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.label.name == 'ready-to-build')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Resolve issue number
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ github.event.inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create branch and initialize state
+        run: |
+          ISSUE=${{ steps.issue.outputs.number }}
+          BRANCH="swarm/issue-${ISSUE}"
+
+          # Create or checkout branch
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH" --rebase
+          else
+            git checkout -b "$BRANCH"
+          fi
+
+          # Initialize swarm-state.json if idle
+          STATUS=$(jq -r '.status' swarm-state.json)
+          if [ "$STATUS" = "idle" ]; then
+            jq --argjson issue "$ISSUE" \
+              '.current_issue = $issue | .status = "active" | .current_stage = "discovery" | .last_updated = now | .human_input_needed = false' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update labels
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE=${{ steps.issue.outputs.number }}
+          gh issue edit "$ISSUE" --remove-label "ready-to-build" --add-label "swarm-working" || true
+
+      - name: Run discovery
+        id: orchestrate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/orchestrator.sh scripts/github-integration.sh
+          scripts/orchestrator.sh discovery
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Push changes
+        run: |
+          BRANCH=$(git branch --show-current)
+          git push origin "$BRANCH" --force-with-lease || git push origin "$BRANCH" -u

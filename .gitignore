@@ -1,2 +1,4 @@
 .DS_Store
 .claude/
+.swarm/logs/*.log
+docs/screenshots/

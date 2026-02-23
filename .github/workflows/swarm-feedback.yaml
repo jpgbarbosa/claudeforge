@@ -1,0 +1,50 @@
+name: Swarm Feedback
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  handle-feedback:
+    if: >
+      contains(github.event.issue.labels.*.name, 'swarm-working') &&
+      github.event.comment.user.login != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve branch
+        id: branch
+        run: |
+          ISSUE=${{ github.event.issue.number }}
+          echo "ref=swarm/issue-${ISSUE}" >> "$GITHUB_OUTPUT"
+          echo "issue=${ISSUE}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout swarm branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.ref }}
+          fetch-depth: 1
+
+      - name: Check if human input needed
+        id: check
+        run: |
+          NEEDED=$(jq -r '.human_input_needed' swarm-state.json)
+          echo "needed=$NEEDED" >> "$GITHUB_OUTPUT"
+
+      - name: Clear flag and resume
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          jq '.human_input_needed = false' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add swarm-state.json
+          git commit -m "swarm: human feedback received, resuming"
+          git push origin HEAD
+
+          # Re-trigger discovery workflow
+          gh workflow run swarm-discovery.yaml \
+            --field issue_number=${{ steps.branch.outputs.issue }}
