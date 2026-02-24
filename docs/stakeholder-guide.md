@@ -52,6 +52,18 @@ If you'd rather the team proceeds immediately with whatever information is avail
 
 The team will do its best with the current info, but the result may require more iteration. Other phrases that work: "proceed as-is" or "skip validation".
 
+### Talking to Claude directly
+
+You can ask Claude questions or request explanations at any time by mentioning `@claude` in a comment on any issue or pull request.
+
+**Examples:**
+- `@claude what is this project about?`
+- `@claude explain the data model for this feature`
+- `@claude what would be the impact of changing the auth provider?`
+- `@claude summarize the changes in this PR`
+
+Claude will respond as a discussion partner — it will answer questions and provide analysis but will **not** modify any code or trigger builds. This is a safe way to explore ideas before committing to a plan.
+
 ### Tips for good requests
 
 - **Be specific**: "Users should be able to filter the table by date range" is better than "Improve the table"
@@ -66,6 +78,14 @@ You can provide feedback at two points:
 2. **On the PR** — after reviewing the plan or testing the preview
 
 Both are equally valid. Earlier feedback saves more time.
+
+### Resuming a failed build
+
+If a build fails or times out mid-task, you can resume it from where it left off by commenting on the PR:
+
+> `/resume-build`
+
+The AI team will pick up from the last completed task instead of starting over.
 
 ### Labels you'll see
 
