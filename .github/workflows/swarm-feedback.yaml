@@ -34,14 +34,26 @@ jobs:
           ref: ${{ steps.branch.outputs.ref }}
           fetch-depth: 1
 
+      - name: Check if build in progress
+        id: guard
+        run: |
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          if [[ "$STAGE" == "development" || "$STAGE" == "visual_qa" || "$STAGE" == "review" ]]; then
+            echo "Build in progress (stage: $STAGE), skipping feedback handler."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check if human input needed
+        if: steps.guard.outputs.skip != 'true'
         id: check
         run: |
           NEEDED=$(jq -r '.human_input_needed' swarm-state.json)
           echo "needed=$NEEDED" >> "$GITHUB_OUTPUT"
 
       - name: Clear flag and resume
-        if: steps.check.outputs.needed == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.check.outputs.needed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -11,24 +11,26 @@ Stakeholder creates Issue (using template)
         |
 Issue labeled "ready-to-build"
         |
-GitHub Actions → Discovery workflow starts
+GitHub Actions -> Discovery workflow starts
         |
 Discovery agents ask questions (issue comments)
         |
-Stakeholder answers → feedback workflow resumes discovery
+Stakeholder answers -> feedback workflow resumes discovery
         |
-Planning agent creates plan → Draft PR opened
+Planning agent creates plan -> Draft PR opened
         |
 Stakeholder reviews plan, approves (/approve-plan)
         |
-GitHub Actions → Build workflow starts
+GitHub Actions -> Build workflow starts
         |
 Development agents build (TDD, visual QA loop)
         |
-Reviewer agent checks quality → PR marked ready
+Reviewer agent checks quality -> PR marked ready
         |
-Tech reviewer merges → production
+Tech reviewer merges -> production
 ```
+
+You can also `@claude` on any issue or PR to ask questions or discuss requirements interactively.
 
 ## Quick Start — New Project
 
@@ -46,14 +48,14 @@ git clone git@github.com:<your-org>/my-project.git
 
 ### 3. Set GitHub secrets
 
-Go to repo → Settings → Secrets and variables → Actions, and add:
+Go to repo -> Settings -> Secrets and variables -> Actions, and add:
 
 | Secret | Source |
 |---|---|
 | `ANTHROPIC_API_KEY` | [Anthropic Console](https://console.anthropic.com/) |
-| `SUPABASE_URL` | Supabase project settings → API |
-| `SUPABASE_ANON_KEY` | Supabase project settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API |
+| `SUPABASE_URL` | Supabase project settings -> API |
+| `SUPABASE_ANON_KEY` | Supabase project settings -> API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings -> API |
 
 ### 4. Fill in project context
 
@@ -70,7 +72,7 @@ Edit `.swarm/config.yaml`:
 
 Share the repo with stakeholders. Point them to [docs/stakeholder-guide.md](docs/stakeholder-guide.md).
 
-They create issues using the templates → the swarm handles the rest.
+They create issues using the templates -> the swarm handles the rest.
 
 ---
 
@@ -91,7 +93,7 @@ cd /tmp/claudeforge
 ./scripts/integrate.sh /path/to/your-existing-project
 ```
 
-This copies the swarm files (`.swarm/`, `scripts/`, `.github/`, `swarm-state.json`, docs) into your project without touching your existing code.
+This copies the swarm files (`.swarm/`, `scripts/`, `.github/`, `CLAUDE.md`, `swarm-state.json`, docs) into your project without touching your existing code.
 
 ### 3. Fill in `docs/project-context.md`
 
@@ -132,7 +134,6 @@ git push
   logs/                    # Agent execution logs (gitignored)
 
 scripts/
-  orchestrator.sh          # Main state machine executor
   github-integration.sh    # GitHub API helpers (gh CLI)
   integrate.sh             # Integration script for existing projects
 
@@ -143,6 +144,7 @@ docs/
 
 .github/
   workflows/
+    claude.yaml            # Interactive @claude discussions
     swarm-discovery.yaml   # Triggered by ready-to-build label
     swarm-build.yaml       # Triggered by plan approval
     swarm-feedback.yaml    # Triggered by stakeholder comments
@@ -150,6 +152,7 @@ docs/
     bug-report.yaml
     feature-request.yaml
 
+CLAUDE.md                  # Instructions for interactive Claude mode
 swarm-state.json           # Pipeline state (current stage, tasks, etc.)
 vercel.json                # Vercel configuration
 ```
@@ -170,8 +173,9 @@ vercel.json                # Vercel configuration
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `swarm-discovery` | Issue labeled `ready-to-build`, or `workflow_dispatch` | Runs discovery agents, opens draft PR |
-| `swarm-build` | PR approved or `/approve-plan` comment | Runs dev loop, visual QA, reviewer, marks PR ready |
+| `claude` | `@claude` mention on issue/PR | Interactive discussion — read-only, no code changes |
+| `swarm-discovery` | Issue labeled `ready-to-build`, or `workflow_dispatch` | Runs discovery agents (4 steps), opens draft PR |
+| `swarm-build` | PR approved or `/approve-plan` comment | Runs dev loop, visual QA (up to 3 cycles), reviewer, marks PR ready |
 | `swarm-feedback` | Comment on issue with `swarm-working` label | Clears human-input flag, re-triggers discovery |
 
 ## Configuration
@@ -179,8 +183,7 @@ vercel.json                # Vercel configuration
 Edit `.swarm/config.yaml` to configure:
 
 - **project_name** / **repo** — identifies the project
-- **model** — which Claude model agents use
-- **stages** — pipeline stages (discovery → planning → development → visual_qa → review)
+- **stages** — pipeline stages (discovery -> planning -> development -> visual_qa -> review)
 - **github** — label names, PR settings
 - **gates** — human approval checkpoints (plan approval, tech review)
 - **stack** — framework, runtime, database, testing tools
