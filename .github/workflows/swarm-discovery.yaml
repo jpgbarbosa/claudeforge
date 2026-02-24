@@ -23,6 +23,7 @@ jobs:
       contents: write        # git push
       issues: write          # gh issue edit (labels, comments)
       pull-requests: write   # gh pr create --draft
+      id-token: write        # claude-code-action OIDC token
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:

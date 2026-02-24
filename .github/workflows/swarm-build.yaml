@@ -21,6 +21,7 @@ jobs:
       contents: write        # git push
       pull-requests: write   # gh pr ready, gh pr view
       issues: read           # issue_comment trigger context
+      id-token: write        # claude-code-action OIDC token
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
