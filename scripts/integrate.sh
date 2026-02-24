@@ -41,9 +41,11 @@ cp -r "$TEMPLATE_DIR/.swarm" "$TARGET/"
 
 echo "-> Copying scripts/"
 mkdir -p "$TARGET/scripts"
-cp "$TEMPLATE_DIR/scripts/orchestrator.sh" "$TARGET/scripts/"
 cp "$TEMPLATE_DIR/scripts/github-integration.sh" "$TARGET/scripts/"
 chmod +x "$TARGET/scripts/"*.sh
+
+echo "-> Copying CLAUDE.md"
+cp "$TEMPLATE_DIR/CLAUDE.md" "$TARGET/"
 
 echo "-> Copying GitHub workflows and issue templates"
 mkdir -p "$TARGET/.github/workflows"
