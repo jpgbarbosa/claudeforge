@@ -112,6 +112,9 @@ jobs:
         id: post_dev
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: developer artifacts"
           git pull origin "$BRANCH" --rebase || true
 
           TOTAL=$(jq -r '.total_tasks // 0' swarm-state.json)
@@ -160,6 +163,9 @@ jobs:
         id: qa1_check
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: visual-qa artifacts"
           git pull origin "$BRANCH" --rebase || true
           # Check if QA set stage back to development
           STAGE=$(jq -r '.current_stage' swarm-state.json)
@@ -196,6 +202,9 @@ jobs:
         if: steps.qa1_check.outputs.passed == 'false'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: dev rework 2 artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.current_stage = "visual_qa" | .last_agent = "developer"' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -222,6 +231,9 @@ jobs:
         id: qa2_check
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: visual-qa cycle 2 artifacts"
           git pull origin "$BRANCH" --rebase || true
           STAGE=$(jq -r '.current_stage' swarm-state.json)
           if [ "$STAGE" = "development" ]; then
@@ -255,6 +267,9 @@ jobs:
         if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: dev rework 3 artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.current_stage = "visual_qa" | .last_agent = "developer"' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -281,6 +296,9 @@ jobs:
         id: qa3_check
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: visual-qa cycle 3 artifacts"
           git pull origin "$BRANCH" --rebase || true
           STAGE=$(jq -r '.current_stage' swarm-state.json)
           if [ "$STAGE" = "development" ]; then
@@ -303,6 +321,7 @@ jobs:
           steps.qa2_check.outputs.passed == 'false' &&
           steps.qa3_check.outputs.passed == 'false'
         run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           jq '.status = "error" | .last_agent = "visual-qa"' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
           git add -A
@@ -321,6 +340,7 @@ jobs:
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
         run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           jq '.current_stage = "review"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
           git add -A
           git diff --cached --quiet || { git commit -m "swarm: visual QA passed, starting review"; git push origin HEAD; }
@@ -347,6 +367,9 @@ jobs:
           steps.qa3_check.outputs.passed == 'true'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: reviewer artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.last_agent = "reviewer" | .last_updated = (now | tostring)' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -361,6 +384,7 @@ jobs:
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
         run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           chmod +x scripts/github-integration.sh
           source scripts/github-integration.sh
           gh_mark_pr_ready

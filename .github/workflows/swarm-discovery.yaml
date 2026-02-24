@@ -138,6 +138,9 @@ jobs:
         if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: business-analyst artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.last_agent = "business-analyst" | .resume_agent = null | .last_updated = (now | tostring)' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -196,6 +199,9 @@ jobs:
           steps.ps_check.outputs.run == 'true'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: product-strategist artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.last_agent = "product-strategist" | .resume_agent = null | .last_updated = (now | tostring)' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -260,6 +266,9 @@ jobs:
           steps.arch_check.outputs.run == 'true'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: architect artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.last_agent = "architect" | .resume_agent = null | .last_updated = (now | tostring)' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -291,6 +300,7 @@ jobs:
           steps.gate_ps.outputs.blocked != 'true' &&
           steps.gate_arch.outputs.blocked != 'true'
         run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           jq '.current_stage = "planning"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
           git add -A
           git diff --cached --quiet || { git commit -m "swarm: discovery complete, starting planning"; git push origin HEAD; }
@@ -318,6 +328,9 @@ jobs:
           steps.gate_arch.outputs.blocked != 'true'
         run: |
           BRANCH=$(git branch --show-current)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git diff --cached --quiet || git commit -m "swarm: tech-lead artifacts"
           git pull origin "$BRANCH" --rebase || true
           jq '.last_agent = "tech-lead" | .resume_agent = null | .last_updated = (now | tostring)' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
@@ -343,6 +356,7 @@ jobs:
           steps.gate_ps.outputs.blocked != 'true' &&
           steps.gate_arch.outputs.blocked != 'true'
         run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           jq '.human_input_needed = true | .human_input_channel = "pr" | .current_stage = "planning"' \
             swarm-state.json > tmp.json && mv tmp.json swarm-state.json
           git add -A
