@@ -84,6 +84,14 @@ gh_open_draft_pr() {
   local issue=$(get_issue_number)
   local branch=$(git branch --show-current)
 
+  # Skip if a PR already exists for this branch
+  local existing_pr
+  existing_pr=$(gh pr list --repo "$repo" --head "$branch" --json number -q '.[0].number')
+  if [ -n "$existing_pr" ] && [ "$existing_pr" != "null" ]; then
+    echo "[GH] PR #$existing_pr already exists for branch $branch — skipping creation"
+    return 0
+  fi
+
   local title="[Swarm] Issue #${issue}: $(jq -r '.tasks[0].title // "Implementation"' "$STATE_FILE")"
 
   local body="## 🤖 Automated PR — Issue #${issue}
