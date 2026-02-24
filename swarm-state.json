@@ -7,6 +7,8 @@
   "status": "idle",
   "last_agent": null,
   "last_updated": null,
+  "issue_tier": null,
+  "requires_visual_qa": true,
   "human_input_needed": false,
   "human_input_channel": null,
   "open_questions": [],

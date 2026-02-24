@@ -26,6 +26,22 @@ github:
   post_comments: true
   create_pr: true
 
+# Issue triage — skip unnecessary agents based on complexity
+triage:
+  # Auto-detection: issue template title prefix ([Bug]: → bugfix, [Feature]: → feature)
+  # Manual override: apply swarm-tier:* label before ready-to-build
+  tiers:
+    bugfix:
+      discovery: [business-analyst, tech-lead]
+      build: [developer, reviewer]       # visual QA skipped unless requires_visual_qa is true
+    enhancement:
+      discovery: [business-analyst, architect, tech-lead]
+      build: [developer, visual-qa, reviewer]
+    feature:
+      discovery: [business-analyst, product-strategist, architect, tech-lead]
+      build: [developer, visual-qa, reviewer]  # up to 3 QA cycles
+  default_tier: feature  # when detection is ambiguous
+
 # Human gates
 gates:
   # Stakeholder must approve plan before development starts

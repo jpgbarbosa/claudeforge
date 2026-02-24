@@ -135,13 +135,40 @@ jobs:
           git diff --cached --quiet || { git commit -m "swarm: development phase complete"; git push origin HEAD; }
 
       # =============================================
+      # Check if Visual QA is needed
+      # =============================================
+
+      - name: Check if visual QA is needed
+        if: >
+          steps.build_state.outputs.stage != 'review' &&
+          steps.post_dev.outputs.tasks_done != 'false'
+        id: qa_needed
+        run: |
+          TIER=$(jq -r '.issue_tier // "feature"' swarm-state.json)
+          REQUIRES_QA=$(jq -r '.requires_visual_qa' swarm-state.json)
+          if [ "$REQUIRES_QA" = "null" ]; then REQUIRES_QA="true"; fi
+
+          if [ "$TIER" = "bugfix" ] && [ "$REQUIRES_QA" = "false" ]; then
+            echo "skip_qa=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping Visual QA (bugfix tier, no frontend files touched)"
+            # Advance stage directly to review
+            jq '.current_stage = "review"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git add -A
+            git diff --cached --quiet || { git commit -m "swarm: skipping visual QA (bugfix)"; git push origin HEAD; }
+          else
+            echo "skip_qa=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # =============================================
       # Visual QA — Cycle 1
       # =============================================
 
       - name: Visual QA cycle 1
         if: >
           steps.build_state.outputs.stage != 'review' &&
-          steps.post_dev.outputs.tasks_done != 'false'
+          steps.post_dev.outputs.tasks_done != 'false' &&
+          steps.qa_needed.outputs.skip_qa != 'true'
         id: qa1
         uses: anthropics/claude-code-action@v1
         with:
@@ -159,7 +186,8 @@ jobs:
       - name: QA1 check
         if: >
           steps.build_state.outputs.stage != 'review' &&
-          steps.post_dev.outputs.tasks_done != 'false'
+          steps.post_dev.outputs.tasks_done != 'false' &&
+          steps.qa_needed.outputs.skip_qa != 'true'
         id: qa1_check
         run: |
           BRANCH=$(git branch --show-current)
@@ -317,6 +345,7 @@ jobs:
         if: >
           steps.build_state.outputs.stage != 'review' &&
           steps.post_dev.outputs.tasks_done != 'false' &&
+          steps.qa_needed.outputs.skip_qa != 'true' &&
           steps.qa1_check.outputs.passed == 'false' &&
           steps.qa2_check.outputs.passed == 'false' &&
           steps.qa3_check.outputs.passed == 'false'
@@ -336,6 +365,7 @@ jobs:
       - name: Update stage to review
         if: >
           steps.build_state.outputs.stage == 'review' ||
+          steps.qa_needed.outputs.skip_qa == 'true' ||
           steps.qa1_check.outputs.passed == 'true' ||
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
@@ -348,6 +378,7 @@ jobs:
       - name: Reviewer
         if: >
           steps.build_state.outputs.stage == 'review' ||
+          steps.qa_needed.outputs.skip_qa == 'true' ||
           steps.qa1_check.outputs.passed == 'true' ||
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
@@ -362,6 +393,7 @@ jobs:
       - name: Post-reviewer state update
         if: >
           steps.build_state.outputs.stage == 'review' ||
+          steps.qa_needed.outputs.skip_qa == 'true' ||
           steps.qa1_check.outputs.passed == 'true' ||
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
@@ -380,9 +412,12 @@ jobs:
       - name: Mark PR ready
         if: >
           steps.build_state.outputs.stage == 'review' ||
+          steps.qa_needed.outputs.skip_qa == 'true' ||
           steps.qa1_check.outputs.passed == 'true' ||
           steps.qa2_check.outputs.passed == 'true' ||
           steps.qa3_check.outputs.passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           chmod +x scripts/github-integration.sh
@@ -398,6 +433,7 @@ jobs:
       - name: Notify PR on failure
         if: failure()
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           PR_NUMBER=$(gh pr list --head "${{ steps.branch.outputs.ref }}" --json number -q '.[0].number')

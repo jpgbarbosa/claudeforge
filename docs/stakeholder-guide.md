@@ -87,6 +87,26 @@ If a build fails or times out mid-task, you can resume it from where it left off
 
 The AI team will pick up from the last completed task instead of starting over.
 
+### Issue triage and tier labels
+
+Not every issue needs the full AI pipeline. The system automatically detects the issue type from the template title prefix (`[Bug]:` → bugfix, `[Feature]:` → feature) and skips unnecessary agents to save time.
+
+**Tiers:**
+
+| Tier | What runs | When to use |
+|---|---|---|
+| **bugfix** | BA (lightweight) → TL (1–2 tasks) → Dev → Reviewer | Simple bug fixes — something is broken, needs a targeted fix |
+| **enhancement** | BA → Architect → TL → Dev → Visual QA → Reviewer | Improvements to existing features — new option, better UX |
+| **feature** | BA → PS → Architect → TL → Dev → Visual QA (up to 3 cycles) → Reviewer | New functionality from scratch |
+
+**Manual override:** If you disagree with the auto-detected tier, apply one of these labels **before** adding `ready-to-build`:
+
+- `swarm-tier:bugfix`
+- `swarm-tier:enhancement`
+- `swarm-tier:feature`
+
+The manual label always takes precedence over auto-detection.
+
 ### Labels you'll see
 
 | Label | Meaning |
@@ -95,3 +115,6 @@ The AI team will pick up from the last completed task instead of starting over.
 | `swarm-working` | The AI team is actively working on this |
 | `swarm-review` | Implementation is done, ready for testing and review |
 | `swarm-complete` | Merged and deployed |
+| `swarm-tier:bugfix` | Issue classified as a simple bug fix (fewer agents) |
+| `swarm-tier:enhancement` | Issue classified as an enhancement (moderate pipeline) |
+| `swarm-tier:feature` | Issue classified as a full feature (complete pipeline) |

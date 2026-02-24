@@ -12,6 +12,9 @@ PASS=0
 FAIL=0
 TESTS=()
 
+# Capture repo root before any cd
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 # --- Test helpers ---
 
 setup() {
@@ -387,7 +390,7 @@ test_get_repo_env_var() {
   mkdir -p .swarm
   echo 'repo: "org/project"' > .swarm/config.yaml
 
-  source "$(cd "$(dirname "$0")/.." && pwd)/scripts/github-integration.sh" 2>/dev/null || true
+  source "$REPO_ROOT/scripts/github-integration.sh" 2>/dev/null || true
 
   GITHUB_REPOSITORY="env-org/env-project"
   RESULT=$(get_repo)
@@ -402,7 +405,7 @@ test_get_repo_grep_double_quotes() {
   mkdir -p .swarm
   echo 'repo: "org/project"' > .swarm/config.yaml
 
-  source "$(cd "$(dirname "$0")/.." && pwd)/scripts/github-integration.sh" 2>/dev/null || true
+  source "$REPO_ROOT/scripts/github-integration.sh" 2>/dev/null || true
 
   unset GITHUB_REPOSITORY
   RESULT=$(get_repo)
@@ -416,7 +419,7 @@ test_get_repo_grep_single_quotes() {
   mkdir -p .swarm
   echo "repo: 'org/project'" > .swarm/config.yaml
 
-  source "$(cd "$(dirname "$0")/.." && pwd)/scripts/github-integration.sh" 2>/dev/null || true
+  source "$REPO_ROOT/scripts/github-integration.sh" 2>/dev/null || true
 
   unset GITHUB_REPOSITORY
   RESULT=$(get_repo)
@@ -430,7 +433,7 @@ test_get_repo_grep_no_quotes() {
   mkdir -p .swarm
   echo 'repo: org/project' > .swarm/config.yaml
 
-  source "$(cd "$(dirname "$0")/.." && pwd)/scripts/github-integration.sh" 2>/dev/null || true
+  source "$REPO_ROOT/scripts/github-integration.sh" 2>/dev/null || true
 
   unset GITHUB_REPOSITORY
   RESULT=$(get_repo)

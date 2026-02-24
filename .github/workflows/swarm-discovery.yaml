@@ -107,6 +107,49 @@ jobs:
           echo "resume_agent=$RESUME_AGENT" >> "$GITHUB_OUTPUT"
 
       # =============================================
+      # Triage — classify issue tier
+      # =============================================
+
+      - name: Triage issue
+        if: steps.gate.outputs.blocked != 'true'
+        id: triage
+        run: |
+          ISSUE=${{ steps.issue.outputs.number }}
+
+          # Check if tier is already set in state (resume case)
+          EXISTING_TIER=$(jq -r '.issue_tier // ""' swarm-state.json)
+          if [ -n "$EXISTING_TIER" ] && [ "$EXISTING_TIER" != "null" ]; then
+            echo "tier=$EXISTING_TIER" >> "$GITHUB_OUTPUT"
+            echo "Resuming with existing tier: $EXISTING_TIER"
+            exit 0
+          fi
+
+          # Fetch issue metadata
+          TITLE=$(gh issue view "$ISSUE" --json title -q '.title')
+          LABELS=$(gh issue view "$ISSUE" --json labels -q '.labels[].name')
+
+          # Manual labels take precedence
+          if echo "$LABELS" | grep -q "swarm-tier:bugfix"; then TIER="bugfix"
+          elif echo "$LABELS" | grep -q "swarm-tier:enhancement"; then TIER="enhancement"
+          elif echo "$LABELS" | grep -q "swarm-tier:feature"; then TIER="feature"
+          # Auto-detect from template prefix
+          elif echo "$TITLE" | grep -qi "^\[Bug\]:"; then TIER="bugfix"
+          elif echo "$TITLE" | grep -qi "^\[Feature\]:"; then TIER="feature"
+          # Unknown → full pipeline
+          else TIER="feature"
+          fi
+
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "Triaged as: $TIER"
+
+          # Write tier to state
+          jq --arg tier "$TIER" '.issue_tier = $tier' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+
+          # Apply tier label to the issue
+          gh issue edit "$ISSUE" --add-label "swarm-tier:${TIER}" || true
+
+      # =============================================
       # Agent 1: Business Analyst
       # =============================================
 
@@ -130,6 +173,7 @@ jobs:
           prompt: |
             You are the Business Analyst agent. Read and follow ALL instructions in .swarm/prompts/business-analyst.md.
             Issue number: ${{ steps.issue.outputs.number }}
+            Issue tier: ${{ steps.triage.outputs.tier }}
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
@@ -167,12 +211,14 @@ jobs:
           steps.gate_ba.outputs.blocked != 'true'
         id: ps_check
         run: |
+          TIER="${{ steps.triage.outputs.tier }}"
           LAST="${{ steps.state.outputs.last_agent }}"
           RESUME="${{ steps.state.outputs.resume_agent }}"
           BA_RAN="${{ steps.ba_check.outputs.run }}"
-          # Run if: BA just ran, or resume_agent is product-strategist,
-          # or last_agent was business-analyst (completed previously)
-          if [ "$BA_RAN" = "true" ] || [ "$RESUME" = "product-strategist" ] || [ "$LAST" = "business-analyst" ]; then
+          # PS only runs for feature tier
+          if [ "$TIER" != "feature" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ "$BA_RAN" = "true" ] || [ "$RESUME" = "product-strategist" ] || [ "$LAST" = "business-analyst" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -232,12 +278,19 @@ jobs:
           steps.gate_ps.outputs.blocked != 'true'
         id: arch_check
         run: |
+          TIER="${{ steps.triage.outputs.tier }}"
           LAST="${{ steps.state.outputs.last_agent }}"
           RESUME="${{ steps.state.outputs.resume_agent }}"
           PS_RAN="${{ steps.ps_check.outputs.run }}"
-          # Run if: PS just ran, or resume_agent is architect,
-          # or last_agent was product-strategist
-          if [ "$PS_RAN" = "true" ] || [ "$RESUME" = "architect" ] || [ "$LAST" = "product-strategist" ]; then
+          BA_RAN="${{ steps.ba_check.outputs.run }}"
+          # Architect skipped for bugfix tier
+          if [ "$TIER" = "bugfix" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          # For enhancement tier, architect runs after BA (PS is skipped)
+          elif [ "$TIER" = "enhancement" ] && { [ "$BA_RAN" = "true" ] || [ "$LAST" = "business-analyst" ]; }; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          # Standard: architect runs after PS or on resume
+          elif [ "$PS_RAN" = "true" ] || [ "$RESUME" = "architect" ] || [ "$LAST" = "product-strategist" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -316,6 +369,7 @@ jobs:
           prompt: |
             You are the Tech Lead agent. Read and follow ALL instructions in .swarm/prompts/tech-lead.md.
             Issue number: ${{ steps.issue.outputs.number }}
+            Issue tier: ${{ steps.triage.outputs.tier }}
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
@@ -344,6 +398,8 @@ jobs:
           steps.gate_ba.outputs.blocked != 'true' &&
           steps.gate_ps.outputs.blocked != 'true' &&
           steps.gate_arch.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/github-integration.sh
           source scripts/github-integration.sh
@@ -366,6 +422,7 @@ jobs:
       - name: Notify issue on failure
         if: failure()
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           ISSUE="${{ steps.issue.outputs.number }}"

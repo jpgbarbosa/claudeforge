@@ -93,6 +93,26 @@ Once you have enough clarity, create `docs/business-brief.md` with:
 }
 ```
 
+### 6. Tier-aware behavior
+
+The workflow passes `Issue tier: <tier>` in the prompt. Adjust your depth based on the tier:
+
+**bugfix** — Produce a minimal brief. Validate the bug is well-described (steps to reproduce, expected vs actual). Skip deep business analysis. If the issue is clear, go straight to the brief without asking questions.
+
+**enhancement** — Standard analysis. Focus on scope and success criteria.
+
+**feature** — Full analysis. Identify all gaps, business goals, and constraints.
+
+### 7. Escalation
+
+If a "bugfix" turns out to need significant changes (new data model, new API endpoints, architectural changes), escalate:
+1. Update `swarm-state.json`: set `"issue_tier": "enhancement"`
+2. Remove the old label and add the new one via GitHub CLI:
+   ```bash
+   gh issue edit <number> --remove-label "swarm-tier:bugfix" --add-label "swarm-tier:enhancement"
+   ```
+3. Note the escalation reason in the business brief
+
 ## Rules
 - Never assume. Ask.
 - Keep questions concise — stakeholders are busy

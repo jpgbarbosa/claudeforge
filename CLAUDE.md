@@ -16,8 +16,10 @@ This is **Claude Forge**, a multi-agent AI development pipeline. Stakeholders ra
 ### Pipeline Stages
 
 ```
-Issue Created -> Discovery -> Planning -> Development -> Visual QA -> Review -> Tech Merge
+Issue Created -> Triage -> Discovery -> Planning -> Development -> Visual QA -> Review -> Tech Merge
 ```
+
+**Triage** auto-classifies issues into tiers (bugfix / enhancement / feature) based on the issue template title prefix or `swarm-tier:*` labels. Lower tiers skip unnecessary agents — e.g., a bugfix skips Product Strategist and Architect, and may skip Visual QA if no frontend files are touched.
 
 ### Key Files
 

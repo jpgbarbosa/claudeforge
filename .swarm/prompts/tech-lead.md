@@ -65,6 +65,16 @@ Update state:
 }
 ```
 
+### 5. Tier-aware behavior
+
+The workflow passes `Issue tier: <tier>` in the prompt. Adjust your depth based on the tier:
+
+**bugfix** — Produce a minimal plan with 1–2 tasks: one for the fix, one for a regression test. Keep it tightly scoped. If no frontend files are touched by the fix, set `"requires_visual_qa": false` in `swarm-state.json` so Visual QA is skipped during the build phase. If frontend files (anything under `src/app/`, `src/components/`, `public/`, or CSS/style files) are part of the fix, leave `"requires_visual_qa": true`.
+
+**enhancement** — Standard plan. Moderate depth, 3–8 tasks typically.
+
+**feature** — Full plan. Comprehensive task breakdown with all setup, implementation, and test tasks.
+
 ## Rules
 - Tasks must be ordered by dependency — no forward references
 - Each task should be completable independently (one commit per task)
