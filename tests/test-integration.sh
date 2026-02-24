@@ -78,8 +78,26 @@ MOCK_GIT
   "$REAL_GIT" config user.name "test"
   "$REAL_GIT" config user.email "test@test.com"
 
-  # Copy base state and scripts
-  cp "$REPO_ROOT/swarm-state.json" "$TEST_DIR/swarm-state.json"
+  # Create clean idle state (don't rely on repo's current state)
+  cat > "$TEST_DIR/swarm-state.json" << 'STATE'
+{
+  "project": "",
+  "current_issue": null,
+  "current_stage": "idle",
+  "current_task_index": 0,
+  "total_tasks": 0,
+  "status": "idle",
+  "last_agent": null,
+  "last_updated": null,
+  "issue_tier": null,
+  "requires_visual_qa": true,
+  "human_input_needed": false,
+  "human_input_channel": null,
+  "open_questions": [],
+  "feedback_pending": [],
+  "tasks": []
+}
+STATE
   cp -r "$REPO_ROOT/scripts" "$TEST_DIR/scripts" 2>/dev/null || true
   mkdir -p "$TEST_DIR/.swarm/logs" "$TEST_DIR/docs"
 
