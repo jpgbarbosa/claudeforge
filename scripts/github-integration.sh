@@ -1,6 +1,6 @@
 #!/bin/bash
 # github-integration.sh — GitHub API helpers for the swarm
-# Sourced by orchestrator.sh and available to agents
+# Sourced by workflow steps and available to agents
 # Requires: gh CLI authenticated
 
 set -euo pipefail
@@ -9,7 +9,11 @@ STATE_FILE="swarm-state.json"
 
 # Get repo and issue from state
 get_repo() {
-  yq -r '.repo' .swarm/config.yaml
+  if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    echo "$GITHUB_REPOSITORY"
+  else
+    grep '^repo:' .swarm/config.yaml | sed 's/^repo:[[:space:]]*//' | tr -d "\"'"
+  fi
 }
 
 get_issue_number() {
