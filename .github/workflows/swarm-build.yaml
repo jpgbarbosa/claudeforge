@@ -14,21 +14,22 @@ jobs:
   build:
     if: >
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/approve-plan'))
+      (github.event_name == 'issue_comment' &&
+        (contains(github.event.comment.body, '/approve-plan') ||
+         contains(github.event.comment.body, '/resume-build')))
     permissions:
       contents: write        # git push
       pull-requests: write   # gh pr ready, gh pr view
       issues: read           # issue_comment trigger context
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 240
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Resolve PR branch
         id: branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request_review" ]; then
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
@@ -41,8 +42,6 @@ jobs:
 
       - name: Verify commenter authorization
         if: github.event_name == 'issue_comment'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission --jq '.permission')
           if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" && "$PERMISSION" != "write" ]]; then
@@ -54,50 +53,350 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.branch.outputs.ref }}
-          fetch-depth: 0
+          fetch-depth: 50
 
-      - name: Install tools
-        run: |
-          npm install -g @anthropic-ai/claude-code
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-          claude --version
-          yq --version
-
-      - name: Validate secrets
-        run: |
-          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "::error::ANTHROPIC_API_KEY secret is not configured"
-            exit 1
-          fi
+      - name: Fetch main branch history
+        run: git fetch origin main --depth=50
 
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # --- Update state for build ---
       - name: Update state for build
+        id: build_state
         run: |
-          jq '.current_stage = "development" | .current_task_index = 0 | .human_input_needed = false' \
-            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          INDEX=$(jq -r '.current_task_index' swarm-state.json)
+          if [ "$STAGE" = "planning" ] || [ "$STAGE" = "idle" ]; then
+            jq '.current_stage = "development" | .current_task_index = 0 | .human_input_needed = false' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          else
+            jq '.human_input_needed = false' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+            echo "Resuming from task $INDEX (stage: $STAGE)"
+          fi
+          # Output current stage for conditional steps
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
+
           git add swarm-state.json
-          git commit -m "swarm: plan approved, starting build" || true
+          git commit -m "swarm: build triggered (stage: $STAGE)" || true
           git push origin HEAD
 
-      - name: Run build
-        id: orchestrate
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # =============================================
+      # Development — complete all remaining tasks
+      # =============================================
+
+      - name: Development
+        if: steps.build_state.outputs.stage == 'development'
+        id: dev
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
+
+            IMPORTANT: Complete ALL remaining tasks, not just one. Read swarm-state.json to find current_task_index,
+            then work through every task from that index to the end. After completing each task, update
+            current_task_index in swarm-state.json and commit your changes.
+
+            Repository: ${{ github.repository }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          max_turns: 100
+          use_sticky_comment: false
+
+      - name: Post-dev state update
+        if: steps.build_state.outputs.stage == 'development'
+        id: post_dev
         run: |
-          chmod +x scripts/orchestrator.sh scripts/github-integration.sh
-          EXIT_CODE=0
-          scripts/orchestrator.sh build || EXIT_CODE=$?
-          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 42 ]; then
-            exit "$EXIT_CODE"
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+
+          TOTAL=$(jq -r '.total_tasks // 0' swarm-state.json)
+          CURRENT=$(jq -r '.current_task_index // 0' swarm-state.json)
+
+          if [ "$TOTAL" -gt 0 ] && [ "$CURRENT" -lt "$TOTAL" ] 2>/dev/null; then
+            echo "::warning::Developer completed $CURRENT/$TOTAL tasks. Remaining tasks can be resumed with /resume-build."
+            jq '.last_agent = "developer" | .last_updated = (now | tostring)' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+            echo "tasks_done=false" >> "$GITHUB_OUTPUT"
+          else
+            jq '.current_stage = "visual_qa" | .last_agent = "developer" | .last_updated = (now | tostring)' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+            echo "tasks_done=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Push remaining changes
-        if: always() && (steps.orchestrate.outputs.exit_code == '0' || steps.orchestrate.outputs.exit_code == '42')
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: development phase complete"; git push origin HEAD; }
+
+      # =============================================
+      # Visual QA — Cycle 1
+      # =============================================
+
+      - name: Visual QA cycle 1
+        if: >
+          steps.build_state.outputs.stage != 'review' &&
+          steps.post_dev.outputs.tasks_done != 'false'
+        id: qa1
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
+            Repository: ${{ github.repository }}
+
+            After completing your QA checks, output your result as JSON with this exact structure:
+            {"passed": true/false, "failures": ["list of failures if any"]}
+
+            If all checks pass, set passed=true. If any fail, set passed=false and list the failures.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: false
+
+      - name: QA1 check
+        if: >
+          steps.build_state.outputs.stage != 'review' &&
+          steps.post_dev.outputs.tasks_done != 'false'
+        id: qa1_check
         run: |
-          git push origin HEAD --force-with-lease || echo "No new changes to push"
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          # Check if QA set stage back to development
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          if [ "$STAGE" = "development" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            jq '.last_agent = "visual-qa"' \
+              swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          fi
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: visual QA cycle 1 complete"; git push origin HEAD; }
+
+      # =============================================
+      # Dev Rework + Visual QA — Cycle 2
+      # =============================================
+
+      - name: Dev rework cycle 2
+        if: steps.qa1_check.outputs.passed == 'false'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
+
+            Visual QA found issues. Read the QA report and fix ALL failures. The QA agent set the stage
+            back to development — complete any remaining or re-opened tasks, then commit.
+
+            Repository: ${{ github.repository }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          max_turns: 100
+          use_sticky_comment: false
+
+      - name: Post-rework2 state update
+        if: steps.qa1_check.outputs.passed == 'false'
+        run: |
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          jq '.current_stage = "visual_qa" | .last_agent = "developer"' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: dev rework cycle 2 complete"; git push origin HEAD; }
+
+      - name: Visual QA cycle 2
+        if: steps.qa1_check.outputs.passed == 'false'
+        id: qa2
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
+            Repository: ${{ github.repository }}
+
+            This is QA cycle 2 (rework). Focus on the failures from the previous QA cycle.
+            After completing your QA checks, output your result as JSON with this exact structure:
+            {"passed": true/false, "failures": ["list of failures if any"]}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: false
+
+      - name: QA2 check
+        if: steps.qa1_check.outputs.passed == 'false'
+        id: qa2_check
+        run: |
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          if [ "$STAGE" = "development" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          fi
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: visual QA cycle 2 complete"; git push origin HEAD; }
+
+      # =============================================
+      # Dev Rework + Visual QA — Cycle 3
+      # =============================================
+
+      - name: Dev rework cycle 3
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
+
+            This is the FINAL rework cycle. Visual QA has failed twice. Read all QA reports carefully
+            and fix every remaining issue. This is the last chance before the build fails.
+
+            Repository: ${{ github.repository }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          max_turns: 100
+          use_sticky_comment: false
+
+      - name: Post-rework3 state update
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        run: |
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          jq '.current_stage = "visual_qa" | .last_agent = "developer"' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: dev rework cycle 3 complete"; git push origin HEAD; }
+
+      - name: Visual QA cycle 3
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        id: qa3
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
+            Repository: ${{ github.repository }}
+
+            This is the FINAL QA cycle. Be thorough but pragmatic — flag only genuine failures.
+            After completing your QA checks, output your result as JSON with this exact structure:
+            {"passed": true/false, "failures": ["list of failures if any"]}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: false
+
+      - name: QA3 check
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        id: qa3_check
+        run: |
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          STAGE=$(jq -r '.current_stage' swarm-state.json)
+          if [ "$STAGE" = "development" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          fi
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: visual QA cycle 3 complete"; git push origin HEAD; }
+
+      # =============================================
+      # QA Failure Gate
+      # =============================================
+
+      - name: QA failure gate
+        if: >
+          steps.build_state.outputs.stage != 'review' &&
+          steps.post_dev.outputs.tasks_done != 'false' &&
+          steps.qa1_check.outputs.passed == 'false' &&
+          steps.qa2_check.outputs.passed == 'false' &&
+          steps.qa3_check.outputs.passed == 'false'
+        run: |
+          jq '.status = "error" | .last_agent = "visual-qa"' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: QA rework limit reached"; git push origin HEAD; }
+          echo "::error::Visual QA failed after 3 cycles"
+          exit 1
+
+      # =============================================
+      # Reviewer
+      # =============================================
+
+      - name: Update stage to review
+        if: >
+          steps.build_state.outputs.stage == 'review' ||
+          steps.qa1_check.outputs.passed == 'true' ||
+          steps.qa2_check.outputs.passed == 'true' ||
+          steps.qa3_check.outputs.passed == 'true'
+        run: |
+          jq '.current_stage = "review"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: visual QA passed, starting review"; git push origin HEAD; }
+
+      - name: Reviewer
+        if: >
+          steps.build_state.outputs.stage == 'review' ||
+          steps.qa1_check.outputs.passed == 'true' ||
+          steps.qa2_check.outputs.passed == 'true' ||
+          steps.qa3_check.outputs.passed == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are the Reviewer agent. Read and follow ALL instructions in .swarm/prompts/reviewer.md.
+            Repository: ${{ github.repository }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: false
+
+      - name: Post-reviewer state update
+        if: >
+          steps.build_state.outputs.stage == 'review' ||
+          steps.qa1_check.outputs.passed == 'true' ||
+          steps.qa2_check.outputs.passed == 'true' ||
+          steps.qa3_check.outputs.passed == 'true'
+        run: |
+          BRANCH=$(git branch --show-current)
+          git pull origin "$BRANCH" --rebase || true
+          jq '.last_agent = "reviewer" | .last_updated = (now | tostring)' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: review complete"; git push origin HEAD; }
+
+      # --- Mark PR ready ---
+      - name: Mark PR ready
+        if: >
+          steps.build_state.outputs.stage == 'review' ||
+          steps.qa1_check.outputs.passed == 'true' ||
+          steps.qa2_check.outputs.passed == 'true' ||
+          steps.qa3_check.outputs.passed == 'true'
+        run: |
+          chmod +x scripts/github-integration.sh
+          source scripts/github-integration.sh
+          gh_mark_pr_ready
+
+          jq '.status = "awaiting_tech_review" | .human_input_needed = true | .human_input_channel = "pr"' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
+          git add -A
+          git diff --cached --quiet || { git commit -m "swarm: ready for tech review"; git push origin HEAD; }
+
+      # --- Failure notification ---
+      - name: Notify PR on failure
+        if: failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "${{ steps.branch.outputs.ref }}" --json number -q '.[0].number')
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            LAST_AGENT=$(jq -r '.last_agent // "unknown"' swarm-state.json 2>/dev/null || echo "unknown")
+            STAGE=$(jq -r '.current_stage // "unknown"' swarm-state.json 2>/dev/null || echo "unknown")
+            printf '## Build Failed\n**Stage**: %s | **Last agent**: %s\n**Run**: %s\n\nRe-trigger with `/resume-build`.' \
+              "$STAGE" "$LAST_AGENT" "$RUN_URL" | gh pr comment "$PR_NUMBER" --body-file -
+          fi
+
+      # --- Artifacts ---
+      - name: Upload swarm logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarm-logs-${{ github.run_id }}
+          path: .swarm/logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload state snapshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarm-state-${{ github.run_id }}
+          path: swarm-state.json
+          retention-days: 30
