@@ -9,6 +9,11 @@ on:
         description: "Issue number to resume"
         required: true
         type: number
+      dry_run:
+        description: "Run without calling Claude (test shell logic only)"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: swarm-issue-${{ github.event.inputs.issue_number || github.event.issue.number }}
@@ -167,7 +172,7 @@ jobs:
           fi
 
       - name: Run Business Analyst
-        if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true'
+        if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true' && inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -177,6 +182,15 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Run Business Analyst [dry-run]"
+        if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Business Analyst would run here"
+          mkdir -p docs
+          echo "# Mock business brief" > docs/business-brief.md
+          jq '.last_agent = "business-analyst" | .human_input_needed = false' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-BA state update
         if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true'
@@ -228,7 +242,8 @@ jobs:
         if: >
           steps.gate.outputs.blocked != 'true' &&
           steps.gate_ba.outputs.blocked != 'true' &&
-          steps.ps_check.outputs.run == 'true'
+          steps.ps_check.outputs.run == 'true' &&
+          inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -237,6 +252,19 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Run Product Strategist [dry-run]"
+        if: >
+          steps.gate.outputs.blocked != 'true' &&
+          steps.gate_ba.outputs.blocked != 'true' &&
+          steps.ps_check.outputs.run == 'true' &&
+          inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Product Strategist would run here"
+          mkdir -p docs
+          echo "# Mock product spec" > docs/product-spec.md
+          jq '.last_agent = "product-strategist" | .human_input_needed = false' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-PS state update
         if: >
@@ -301,7 +329,8 @@ jobs:
           steps.gate.outputs.blocked != 'true' &&
           steps.gate_ba.outputs.blocked != 'true' &&
           steps.gate_ps.outputs.blocked != 'true' &&
-          steps.arch_check.outputs.run == 'true'
+          steps.arch_check.outputs.run == 'true' &&
+          inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -310,6 +339,20 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Run Architect [dry-run]"
+        if: >
+          steps.gate.outputs.blocked != 'true' &&
+          steps.gate_ba.outputs.blocked != 'true' &&
+          steps.gate_ps.outputs.blocked != 'true' &&
+          steps.arch_check.outputs.run == 'true' &&
+          inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Architect would run here"
+          mkdir -p docs
+          echo "# Mock architecture spec" > docs/architecture-spec.md
+          jq '.last_agent = "architect" | .human_input_needed = false' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-Architect state update
         if: >
@@ -363,7 +406,8 @@ jobs:
           steps.gate.outputs.blocked != 'true' &&
           steps.gate_ba.outputs.blocked != 'true' &&
           steps.gate_ps.outputs.blocked != 'true' &&
-          steps.gate_arch.outputs.blocked != 'true'
+          steps.gate_arch.outputs.blocked != 'true' &&
+          inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -373,6 +417,20 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Run Tech Lead [dry-run]"
+        if: >
+          steps.gate.outputs.blocked != 'true' &&
+          steps.gate_ba.outputs.blocked != 'true' &&
+          steps.gate_ps.outputs.blocked != 'true' &&
+          steps.gate_arch.outputs.blocked != 'true' &&
+          inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Tech Lead would run here"
+          mkdir -p docs
+          echo "# Mock implementation plan" > docs/plan.md
+          jq '.last_agent = "tech-lead" | .human_input_needed = false | .total_tasks = 3 | .tasks = [{"title":"Mock task 1"},{"title":"Mock task 2"},{"title":"Mock task 3"}]' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-TL state update and commit
         if: >

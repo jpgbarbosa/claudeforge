@@ -5,14 +5,26 @@ on:
     types: [submitted]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_branch:
+        description: "PR branch to build"
+        required: true
+        type: string
+      dry_run:
+        description: "Run without calling Claude (test shell logic only)"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
-  group: swarm-build-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: swarm-build-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_branch }}
   cancel-in-progress: false
 
 jobs:
   build:
     if: >
+      (github.event_name == 'workflow_dispatch') ||
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'issue_comment' &&
         (contains(github.event.comment.body, '/approve-plan') ||
@@ -32,7 +44,9 @@ jobs:
       - name: Resolve PR branch
         id: branch
         run: |
-          if [ "${{ github.event_name }}" = "pull_request_review" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ github.event.inputs.pr_branch }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
           else
             # issue_comment on a PR — get the branch from the PR
@@ -42,7 +56,7 @@ jobs:
           fi
 
       - name: Verify commenter authorization
-        if: github.event_name == 'issue_comment'
+        if: github.event_name == 'issue_comment' && github.event_name != 'workflow_dispatch'
         run: |
           PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission --jq '.permission')
           if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" && "$PERMISSION" != "write" ]]; then
@@ -91,7 +105,7 @@ jobs:
       # =============================================
 
       - name: Development
-        if: steps.build_state.outputs.stage == 'development'
+        if: steps.build_state.outputs.stage == 'development' && inputs.dry_run != true
         id: dev
         uses: anthropics/claude-code-action@v1
         with:
@@ -106,6 +120,14 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           max_turns: 100
           use_sticky_comment: false
+
+      - name: "Development [dry-run]"
+        if: steps.build_state.outputs.stage == 'development' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Developer would run here"
+          TOTAL=$(jq -r '.total_tasks // 0' swarm-state.json)
+          jq --argjson t "$TOTAL" '.current_task_index = $t' \
+            swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-dev state update
         if: steps.build_state.outputs.stage == 'development'
@@ -168,7 +190,8 @@ jobs:
         if: >
           steps.build_state.outputs.stage != 'review' &&
           steps.post_dev.outputs.tasks_done != 'false' &&
-          steps.qa_needed.outputs.skip_qa != 'true'
+          steps.qa_needed.outputs.skip_qa != 'true' &&
+          inputs.dry_run != true
         id: qa1
         uses: anthropics/claude-code-action@v1
         with:
@@ -182,6 +205,16 @@ jobs:
             If all checks pass, set passed=true. If any fail, set passed=false and list the failures.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Visual QA cycle 1 [dry-run]"
+        if: >
+          steps.build_state.outputs.stage != 'review' &&
+          steps.post_dev.outputs.tasks_done != 'false' &&
+          steps.qa_needed.outputs.skip_qa != 'true' &&
+          inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Visual QA cycle 1 would run here"
+          jq '.current_stage = "visual_qa"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: QA1 check
         if: >
@@ -212,7 +245,7 @@ jobs:
       # =============================================
 
       - name: Dev rework cycle 2
-        if: steps.qa1_check.outputs.passed == 'false'
+        if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -225,6 +258,11 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           max_turns: 100
           use_sticky_comment: false
+
+      - name: "Dev rework cycle 2 [dry-run]"
+        if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Dev rework cycle 2 would run here"
 
       - name: Post-rework2 state update
         if: steps.qa1_check.outputs.passed == 'false'
@@ -240,7 +278,7 @@ jobs:
           git diff --cached --quiet || { git commit -m "swarm: dev rework cycle 2 complete"; git push origin HEAD; }
 
       - name: Visual QA cycle 2
-        if: steps.qa1_check.outputs.passed == 'false'
+        if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run != true
         id: qa2
         uses: anthropics/claude-code-action@v1
         with:
@@ -253,6 +291,12 @@ jobs:
             {"passed": true/false, "failures": ["list of failures if any"]}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Visual QA cycle 2 [dry-run]"
+        if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Visual QA cycle 2 would run here"
+          jq '.current_stage = "visual_qa"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: QA2 check
         if: steps.qa1_check.outputs.passed == 'false'
@@ -277,7 +321,7 @@ jobs:
       # =============================================
 
       - name: Dev rework cycle 3
-        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -290,6 +334,11 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           max_turns: 100
           use_sticky_comment: false
+
+      - name: "Dev rework cycle 3 [dry-run]"
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Dev rework cycle 3 would run here"
 
       - name: Post-rework3 state update
         if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
@@ -305,7 +354,7 @@ jobs:
           git diff --cached --quiet || { git commit -m "swarm: dev rework cycle 3 complete"; git push origin HEAD; }
 
       - name: Visual QA cycle 3
-        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run != true
         id: qa3
         uses: anthropics/claude-code-action@v1
         with:
@@ -318,6 +367,12 @@ jobs:
             {"passed": true/false, "failures": ["list of failures if any"]}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Visual QA cycle 3 [dry-run]"
+        if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Visual QA cycle 3 would run here"
+          jq '.current_stage = "visual_qa"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: QA3 check
         if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false'
@@ -377,11 +432,12 @@ jobs:
 
       - name: Reviewer
         if: >
-          steps.build_state.outputs.stage == 'review' ||
+          (steps.build_state.outputs.stage == 'review' ||
           steps.qa_needed.outputs.skip_qa == 'true' ||
           steps.qa1_check.outputs.passed == 'true' ||
           steps.qa2_check.outputs.passed == 'true' ||
-          steps.qa3_check.outputs.passed == 'true'
+          steps.qa3_check.outputs.passed == 'true') &&
+          inputs.dry_run != true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -389,6 +445,18 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+
+      - name: "Reviewer [dry-run]"
+        if: >
+          (steps.build_state.outputs.stage == 'review' ||
+          steps.qa_needed.outputs.skip_qa == 'true' ||
+          steps.qa1_check.outputs.passed == 'true' ||
+          steps.qa2_check.outputs.passed == 'true' ||
+          steps.qa3_check.outputs.passed == 'true') &&
+          inputs.dry_run == true
+        run: |
+          echo "[DRY-RUN] Reviewer would run here"
+          jq '.last_agent = "reviewer"' swarm-state.json > tmp.json && mv tmp.json swarm-state.json
 
       - name: Post-reviewer state update
         if: >
