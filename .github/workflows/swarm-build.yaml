@@ -122,8 +122,12 @@ jobs:
 
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          max_turns: 100
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
+          claude_args: |
+            --max-turns 100
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(bun:*)"
 
       - name: "Development [dry-run]"
         if: steps.build_state.outputs.stage == 'development' && inputs.dry_run == true
@@ -213,6 +217,8 @@ jobs:
             If all checks pass, set passed=true. If any fail, set passed=false and list the failures.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Visual QA cycle 1 [dry-run]"
         if: >
@@ -268,8 +274,12 @@ jobs:
 
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          max_turns: 100
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
+          claude_args: |
+            --max-turns 100
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(bun:*)"
 
       - name: "Dev rework cycle 2 [dry-run]"
         if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run == true
@@ -307,6 +317,8 @@ jobs:
             {"passed": true/false, "failures": ["list of failures if any"]}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Visual QA cycle 2 [dry-run]"
         if: steps.qa1_check.outputs.passed == 'false' && inputs.dry_run == true
@@ -352,8 +364,12 @@ jobs:
 
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          max_turns: 100
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
+          claude_args: |
+            --max-turns 100
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(bun:*)"
 
       - name: "Dev rework cycle 3 [dry-run]"
         if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run == true
@@ -391,6 +407,8 @@ jobs:
             {"passed": true/false, "failures": ["list of failures if any"]}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Visual QA cycle 3 [dry-run]"
         if: steps.qa1_check.outputs.passed == 'false' && steps.qa2_check.outputs.passed == 'false' && inputs.dry_run == true
@@ -473,6 +491,8 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Reviewer [dry-run]"
         if: >

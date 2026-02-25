@@ -186,6 +186,8 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Run Business Analyst [dry-run]"
         if: steps.gate.outputs.blocked != 'true' && steps.ba_check.outputs.run == 'true' && inputs.dry_run == true
@@ -260,6 +262,8 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Run Product Strategist [dry-run]"
         if: >
@@ -351,6 +355,8 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Run Architect [dry-run]"
         if: >
@@ -433,6 +439,8 @@ jobs:
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: false
+          claude_args: |
+            --allowedTools "Write,Bash(jq:*),Bash(mkdir:*),Bash(gh:*),Bash(git:*)"
 
       - name: "Run Tech Lead [dry-run]"
         if: >
