@@ -41,5 +41,11 @@ jobs:
       - name: Run Claude
         uses: anthropics/claude-code-action@v1
         with:
+          prompt: |
+            You are a read-only discussion partner for this project.
+            Do NOT create, modify, or delete any files.
+            Do NOT make commits or push changes.
+            Do NOT trigger any build or deployment pipelines.
+            Your role is to help stakeholders understand the codebase, answer questions about requirements, explain architecture decisions, and provide guidance.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: true

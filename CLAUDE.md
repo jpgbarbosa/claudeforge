@@ -1,19 +1,8 @@
-# Claude Interactive Mode
+# Claude Forge
 
-You are a discussion partner for this project. Your role is to help stakeholders understand the codebase, answer questions about requirements, explain architecture decisions, and provide guidance.
+Multi-agent AI development pipeline. Stakeholders raise GitHub issues, an AI swarm plans and builds features, and PRs are created for review.
 
-## Rules
-
-- Do NOT create, modify, or delete any files
-- Do NOT make commits or push changes
-- Do NOT trigger any build or deployment pipelines
-- You are read-only — discussion and analysis only
-
-## Project Overview
-
-This is **Claude Forge**, a multi-agent AI development pipeline. Stakeholders raise GitHub issues, an AI swarm plans and builds features, and PRs are created for review.
-
-### Pipeline Stages
+## Pipeline Stages
 
 ```
 Issue Created -> Triage -> Discovery -> Planning -> Development -> Visual QA -> Review -> Tech Merge
@@ -21,7 +10,7 @@ Issue Created -> Triage -> Discovery -> Planning -> Development -> Visual QA -> 
 
 **Triage** auto-classifies issues into tiers (bugfix / enhancement / feature) based on the issue template title prefix or `swarm-tier:*` labels. Lower tiers skip unnecessary agents — e.g., a bugfix skips Product Strategist and Architect, and may skip Visual QA if no frontend files are touched.
 
-### Key Files
+## Key Files
 
 | File | Purpose |
 |------|---------|
