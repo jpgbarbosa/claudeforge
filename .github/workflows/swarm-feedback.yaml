@@ -12,7 +12,8 @@ jobs:
   handle-feedback:
     if: >
       contains(github.event.issue.labels.*.name, 'swarm-working') &&
-      github.event.comment.user.login != 'github-actions[bot]'
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      github.event.comment.user.type != 'Bot'
     permissions:
       contents: write        # git push (clear flag)
       actions: write         # gh workflow run (re-trigger discovery)
