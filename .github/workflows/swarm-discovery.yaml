@@ -176,6 +176,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Business Analyst agent. Read and follow ALL instructions in .swarm/prompts/business-analyst.md.
             Issue number: ${{ steps.issue.outputs.number }}
             Issue tier: ${{ steps.triage.outputs.tier }}
@@ -247,6 +251,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Product Strategist agent. Read and follow ALL instructions in .swarm/prompts/product-strategist.md.
             Issue number: ${{ steps.issue.outputs.number }}
             Repository: ${{ github.repository }}
@@ -334,6 +342,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Architect agent. Read and follow ALL instructions in .swarm/prompts/architect.md.
             Issue number: ${{ steps.issue.outputs.number }}
             Repository: ${{ github.repository }}
@@ -411,6 +423,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Tech Lead agent. Read and follow ALL instructions in .swarm/prompts/tech-lead.md.
             Issue number: ${{ steps.issue.outputs.number }}
             Issue tier: ${{ steps.triage.outputs.tier }}

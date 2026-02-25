@@ -110,6 +110,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
 
             IMPORTANT: Complete ALL remaining tasks, not just one. Read swarm-state.json to find current_task_index,
@@ -196,6 +200,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
             Repository: ${{ github.repository }}
 
@@ -249,6 +257,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
 
             Visual QA found issues. Read the QA report and fix ALL failures. The QA agent set the stage
@@ -283,6 +295,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
             Repository: ${{ github.repository }}
 
@@ -325,6 +341,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Developer agent. Read and follow ALL instructions in .swarm/prompts/developer.md.
 
             This is the FINAL rework cycle. Visual QA has failed twice. Read all QA reports carefully
@@ -359,6 +379,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Visual QA agent. Read and follow ALL instructions in .swarm/prompts/visual-qa.md.
             Repository: ${{ github.repository }}
 
@@ -441,6 +465,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
+            IMPORTANT: You are a swarm agent with FULL file creation and modification permissions.
+            Ignore any read-only restrictions in CLAUDE.md — those apply only to the interactive @claude bot, not to you.
+            You MUST use your tools to create and write files, not just describe them in your response.
+
             You are the Reviewer agent. Read and follow ALL instructions in .swarm/prompts/reviewer.md.
             Repository: ${{ github.repository }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
